@@ -34,6 +34,7 @@ use Flowpack\ElasticSearch\Transfer\Exception\ApiException;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\Service\Context;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
+use Neos\ContentRepository\Exception\NodeException;
 use Neos\ContentRepository\Search\Indexer\AbstractNodeIndexer;
 use Neos\ContentRepository\Search\Indexer\BulkNodeIndexerInterface;
 use Neos\Flow\Annotations as Flow;
@@ -242,6 +243,21 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
                     return;
                 }
             }
+
+            // Skip indexing if the node has a hidden parent
+            $parentNode = $node;
+            while ($parentNode = $parentNode->getParent()) {
+                // Stop if the parent is a root or unstructured node
+                if ((string)$parentNode->findNodePath() === '/sites' || (string)$parentNode->getNodeTypeName() === 'unstructured') {
+                    break;
+                }
+
+                // Exit if a hidden parent is found
+                if (!$parentNode->isVisible()) {
+                    return;
+                }
+            }
+
 
             $documentIdentifier = $this->documentIdentifierGenerator->generate($node, $targetWorkspaceName);
             $nodeType = $node->getNodeType();
