@@ -34,6 +34,7 @@ use Flowpack\ElasticSearch\Transfer\Exception\ApiException;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\Service\Context;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
+use Neos\ContentRepository\Exception\NodeException;
 use Neos\ContentRepository\Search\Indexer\AbstractNodeIndexer;
 use Neos\ContentRepository\Search\Indexer\BulkNodeIndexerInterface;
 use Neos\Flow\Annotations as Flow;
@@ -241,6 +242,27 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
                 if ($targetWorkspaceName === null && $node->getContext()->getWorkspaceName() !== 'live') {
                     return;
                 }
+            }
+
+            // Don't index if the node has a hidden parent
+            $parentNode = null;
+            $contextNode = $node;
+            do {
+                try {
+                    $contextNode = $contextNode->findParentNode();
+                } catch (NodeException $exception) {
+                    break;
+                }
+                if ($contextNode->findNodePath() === '/sites' || $contextNode->getNodeTypeName() == 'unstructured') {
+                    $parentNode = null;
+                    break;
+                }
+                $parentNode = $contextNode;
+            } while ($parentNode->isVisible());
+
+            if ($parentNode && !$parentNode->isVisible()) {
+                $this->logger->error(sprintf('Node %s not indexed, because parentNode %s is hidden.', $node->getIdentifier(), $parentNode->getIdentifier()), LogEnvironment::fromMethodName(__METHOD__));
+                return;
             }
 
             $documentIdentifier = $this->documentIdentifierGenerator->generate($node, $targetWorkspaceName);
