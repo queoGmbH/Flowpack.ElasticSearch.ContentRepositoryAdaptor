@@ -244,25 +244,18 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
                 }
             }
 
-            // Don't index if the node has a hidden parent
-            $parentNode = null;
-            $contextNode = $node;
-            do {
-                try {
-                    $contextNode = $contextNode->findParentNode();
-                } catch (NodeException $exception) {
+            // Skip indexing if the node has a hidden parent
+            $parentNode = $node;
+            while ($parentNode = $parentNode->getParent()) {
+                // Stop if the parent is a root or unstructured node
+                if ((string)$parentNode->findNodePath() === '/sites' || (string)$parentNode->getNodeTypeName() === 'unstructured') {
                     break;
                 }
-                if ($contextNode->findNodePath() === '/sites' || $contextNode->getNodeTypeName() == 'unstructured') {
-                    $parentNode = null;
-                    break;
-                }
-                $parentNode = $contextNode;
-            } while ($parentNode->isVisible());
 
-            if ($parentNode && !$parentNode->isVisible()) {
-                $this->logger->error(sprintf('Node %s not indexed, because parentNode %s is hidden.', $node->getIdentifier(), $parentNode->getIdentifier()), LogEnvironment::fromMethodName(__METHOD__));
-                return;
+                // Exit if a hidden parent is found
+                if (!$parentNode->isVisible()) {
+                    return;
+                }
             }
 
             $documentIdentifier = $this->documentIdentifierGenerator->generate($node, $targetWorkspaceName);
